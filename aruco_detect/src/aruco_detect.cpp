@@ -428,8 +428,8 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                                       reprojectionError);
 
             for (size_t i=0; i<ids.size(); i++) {
-                aruco::drawAxis(cv_ptr->image, cameraMatrix, distortionCoeffs,
-                                rvecs[i], tvecs[i], (float)fiducial_len);
+                cv::drawFrameAxes(cv_ptr->image, cameraMatrix, distortionCoeffs,
+                                  rvecs[i], tvecs[i], (float)fiducial_len);
                 if(verbose){
                     ROS_INFO("Detected id %d T %.2f %.2f %.2f R %.2f %.2f %.2f", ids[i],
                          tvecs[i][0], tvecs[i][1], tvecs[i][2],
