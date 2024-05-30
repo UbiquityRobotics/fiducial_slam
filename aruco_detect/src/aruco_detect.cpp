@@ -663,7 +663,7 @@ FiducialsNode::FiducialsNode() : nh(), pnh("~"), it(nh)
         }
     }
 
-    image_pub = it.advertise("/fiducial_images", 1);
+    image_pub = it.advertise("fiducial_images", 1);
 
     vertices_pub = nh.advertise<fiducial_msgs::FiducialArray>("fiducial_vertices", 1);
 
