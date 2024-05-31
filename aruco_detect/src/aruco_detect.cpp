@@ -459,23 +459,31 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                         (reprojectionError[i] / dist(corners[i][0], corners[i][2])) *
                         (norm(tvecs[i]) / fiducial_len);
 
+                tf2::Quaternion q;
+                geometry_msgs::Transform transform;
+                {
+                  transform.translation.x = tvecs[i][0];
+                  transform.translation.y = tvecs[i][1];
+                  transform.translation.z = tvecs[i][2];
+                  q.setRotation(tf2::Vector3(axis[0], axis[1], axis[2]), angle);
+                  transform.rotation.w = q.w();
+                  transform.rotation.x = q.x();
+                  transform.rotation.y = q.y();
+                  transform.rotation.z = q.z();
+                }
+
                 // Standard ROS vision_msgs
                 fiducial_msgs::FiducialTransform ft;
-                tf2::Quaternion q;
                 if (vis_msgs) {
                     vision_msgs::Detection2D vm;
                     vm.header = vma.header;
                     vision_msgs::ObjectHypothesisWithPose vmh;
                     vmh.id = ids[i];
                     vmh.score = exp(-2 * object_error); // [0, infinity] -> [1,0]
-                    vmh.pose.pose.position.x = tvecs[i][0];
-                    vmh.pose.pose.position.y = tvecs[i][1];
-                    vmh.pose.pose.position.z = tvecs[i][2];
-                    q.setRotation(tf2::Vector3(axis[0], axis[1], axis[2]), angle);
-                    vmh.pose.pose.orientation.w = q.w();
-                    vmh.pose.pose.orientation.x = q.x();
-                    vmh.pose.pose.orientation.y = q.y();
-                    vmh.pose.pose.orientation.z = q.z();
+                    vmh.pose.pose.position.x = transform.translation.x;
+                    vmh.pose.pose.position.y = transform.translation.y;
+                    vmh.pose.pose.position.z = transform.translation.z;
+                    vmh.pose.pose.orientation = transform.rotation;
 
                     vm.results.push_back(vmh);
                     vma.detections.push_back(vm);
@@ -483,14 +491,7 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                 else {
                     ft.fiducial_id = ids[i];
 
-                    ft.transform.translation.x = tvecs[i][0];
-                    ft.transform.translation.y = tvecs[i][1];
-                    ft.transform.translation.z = tvecs[i][2];
-                    q.setRotation(tf2::Vector3(axis[0], axis[1], axis[2]), angle);
-                    ft.transform.rotation.w = q.w();
-                    ft.transform.rotation.x = q.x();
-                    ft.transform.rotation.y = q.y();
-                    ft.transform.rotation.z = q.z();
+                    ft.transform = transform;
                     ft.fiducial_area = calcFiducialArea(corners[i]);
                     ft.image_error = reprojectionError[i];
                     // Convert image_error (in pixels) to object_error (in meters)
@@ -504,28 +505,12 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                 // Publish tf for the fiducial relative to the camera
                 if (publishFiducialTf) {
                     const auto frame = msg->header.frame_id + "_" + tf_prefix + std::to_string(ids[i]);
-                    if (vis_msgs) {
-                        geometry_msgs::TransformStamped ts;
-                        ts.transform.translation.x = tvecs[i][0];
-                        ts.transform.translation.y = tvecs[i][1];
-                        ts.transform.translation.z = tvecs[i][2];
-                        ts.transform.rotation.w = q.w();
-                        ts.transform.rotation.x = q.x();
-                        ts.transform.rotation.y = q.y();
-                        ts.transform.rotation.z = q.z();
-                        ts.header.frame_id = frameId;
-                        ts.header.stamp = msg->header.stamp;
-                        ts.child_frame_id = frame;
-                        broadcaster.sendTransform(ts);
-                    }
-                    else {
-                        geometry_msgs::TransformStamped ts;
-                        ts.transform = ft.transform;
-                        ts.header.frame_id = frameId;
-                        ts.header.stamp = msg->header.stamp;
-                        ts.child_frame_id = frame;
-                        broadcaster.sendTransform(ts);
-                    }
+                    geometry_msgs::TransformStamped ts;
+                    ts.transform = transform;
+                    ts.header.frame_id = frameId;
+                    ts.header.stamp = msg->header.stamp;
+                    ts.child_frame_id = frame;
+                    broadcaster.sendTransform(ts);
                 }
             }
         }
