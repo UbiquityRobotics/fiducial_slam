@@ -464,6 +464,7 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                 tf2::Quaternion q;
                 if (vis_msgs) {
                     vision_msgs::Detection2D vm;
+                    vm.header = vma.header;
                     vision_msgs::ObjectHypothesisWithPose vmh;
                     vmh.id = ids[i];
                     vmh.score = exp(-2 * object_error); // [0, infinity] -> [1,0]
