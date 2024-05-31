@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   fiducial_msgs
   dynamic_reconfigure
+  vision_msgs
 )
 
 find_package(OpenCV REQUIRED)
@@ -35,8 +36,6 @@ catkin_package(
 ###########
 ## Build ##
 ###########
-
-add_definitions(-std=c++11)
 
 include_directories(
   include
