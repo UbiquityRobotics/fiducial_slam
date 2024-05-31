@@ -44,6 +44,7 @@
 #include <visualization_msgs/Marker.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
 #include <dynamic_reconfigure/server.h>
 #include <std_srvs/SetBool.h>
@@ -113,7 +114,7 @@ class FiducialsNode {
     ros::NodeHandle nh;
     ros::NodeHandle pnh;
 
-    image_transport::Publisher image_pub;
+    ros::Publisher image_pub;
 
     // log spam prevention
     int prev_detected_count;
@@ -663,7 +664,7 @@ FiducialsNode::FiducialsNode() : nh(), pnh("~"), it(nh)
         }
     }
 
-    image_pub = it.advertise("fiducial_images", 1);
+    image_pub = nh.advertise<sensor_msgs::Image>("fiducial_images", 1);
 
     vertices_pub = nh.advertise<fiducial_msgs::FiducialArray>("fiducial_vertices", 1);
 
