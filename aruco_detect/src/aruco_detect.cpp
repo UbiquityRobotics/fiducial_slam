@@ -503,6 +503,7 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
 
                 // Publish tf for the fiducial relative to the camera
                 if (publishFiducialTf) {
+                    const auto frame = msg->header.frame_id + "_" + tf_prefix + std::to_string(ids[i]);
                     if (vis_msgs) {
                         geometry_msgs::TransformStamped ts;
                         ts.transform.translation.x = tvecs[i][0];
@@ -514,7 +515,7 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                         ts.transform.rotation.z = q.z();
                         ts.header.frame_id = frameId;
                         ts.header.stamp = msg->header.stamp;
-                        ts.child_frame_id = tf_prefix + std::to_string(ids[i]);
+                        ts.child_frame_id = frame;
                         broadcaster.sendTransform(ts);
                     }
                     else {
@@ -522,7 +523,7 @@ void FiducialsNode::poseEstimateCallback(const FiducialArrayConstPtr & msg)
                         ts.transform = ft.transform;
                         ts.header.frame_id = frameId;
                         ts.header.stamp = msg->header.stamp;
-                        ts.child_frame_id = tf_prefix + std::to_string(ft.fiducial_id);
+                        ts.child_frame_id = frame;
                         broadcaster.sendTransform(ts);
                     }
                 }
