@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
   <name>stag_detect</name>
   <version>0.11.0</version>
   <description>Fiducial detection based on the stag library</description>
 
-  <maintainer email="tp@ubiquityrobotics.org">Teodor Janez Podobnik</maintainer>
+  <maintainer email="mb@ubiquityrobotics.com">Matjaz Bostic</maintainer>
   <maintainer email="jimv@mrjim.com">Jim Vaughan</maintainer>
   <maintainer email="send2arohan@gmail.com">Rohan Agrawal</maintainer>
 
@@ -12,9 +12,11 @@
 
   <author email="jimv@mrjim.com">Jim Vaughan</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <!-- Build tool -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>roscpp</depend>
+  <!-- Runtime and build dependencies -->
+  <depend>rclcpp</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
@@ -26,8 +28,15 @@
   <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>fiducial_msgs</depend>
-  <depend>dynamic_reconfigure</depend>
-  <depend>python3-cairosvg</depend>
   <depend>camera_info_manager</depend>
+  <depend>python3-cairosvg</depend>
 
+  <!-- Dynamic reconfigure is not directly supported in ROS2 -->
+  <depend>dynamic_reconfigure</depend> <!-- Check for ROS2 alternatives or remove if not needed -->
+
+  <!-- Export section -->
+  <export>
+    <!-- Required for ament packages -->
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

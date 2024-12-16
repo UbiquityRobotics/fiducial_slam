@@ -1,50 +1,36 @@
-
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(stag_detect)
 
-find_package(catkin REQUIRED COMPONENTS
-  camera_info_manager
-  cv_bridge
-  geometry_msgs
-  tf
-  roscpp
-  tf2_geometry_msgs
-  tf2_ros
-  tf2
-  visualization_msgs
-  image_transport
-  cv_bridge
-  sensor_msgs
-  std_msgs
-  fiducial_msgs
-  dynamic_reconfigure
-)
-
+# Required dependencies
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_ros REQUIRED)
+find_package(camera_info_manager REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(vision_msgs REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(fiducial_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(dynamic_reconfigure QUIET) # Not fully supported in ROS2, alternatives may be needed
 find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
 
-generate_dynamic_reconfigure_options(cfg/DetectorParams.cfg)
+# Generate dynamic reconfigure options (if supported in ROS2)
+# NOTE: ROS2 doesn't have built-in support for dynamic_reconfigure like ROS1.
+# You will need to use an alternative or manually adapt the configuration system.
 
-catkin_package(
-  INCLUDE_DIRS include src/stag
-  LIBRARIES stag_ros
-  CATKIN_DEPENDS camera_info_manager cv_bridge geometry_msgs image_transport roscpp sensor_msgs std_msgs
-)
-
-###########
-## Build ##
-###########
-
-add_definitions(-std=c++11)
-
+# Include directories
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
 )
 
-## Runnables
+# Declare the library
 add_library(stag_core
   src/stag/Decoder.cpp
   src/stag/Drawer.cpp
@@ -64,33 +50,55 @@ add_library(stag_core
   src/stag/ED/LineSegment.cpp
   src/stag/ED/MyMath.cpp
   src/stag/ED/NFA.cpp
-# src/stag/ED/Utilities.cpp
+  # src/stag/ED/Utilities.cpp
   src/stag/ED/ValidateEdgeSegments.cpp
   include/stag_ros/load_yaml_tags.h
 )
 
+ament_target_dependencies(stag_core
+  OpenCV
+)
+
+# Declare the executable
 add_executable(stag_detect src/stag_ros/stag_detect.cpp)
-add_dependencies(stag_detect ${catkin_EXPORTED_TARGETS})
-target_link_libraries(stag_core ${OpenCV_LIBS})
-target_link_libraries(stag_detect ${catkin_LIBRARIES} ${OpenCV_LIBS} stag_core)
+ament_target_dependencies(stag_detect
+  camera_info_manager
+  cv_bridge
+  geometry_msgs
+  tf2_geometry_msgs
+  tf2_ros
+  tf2
+  visualization_msgs
+  vision_msgs
+  image_transport
+  sensor_msgs
+  std_msgs
+  fiducial_msgs
+  OpenCV
+)
 
-#############
-## Install ##
-#############
+target_link_libraries(stag_detect
+  stag_core
+  ${OpenCV_LIBS}
+)
 
-## Mark executables and/or libraries for installation
+# Install targets
+install(TARGETS
+  stag_core
+  stag_detect
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+)
 
+# Install directories
 install(DIRECTORY launch/
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+  DESTINATION share/${PROJECT_NAME}/launch
 )
 
 install(DIRECTORY cfg/
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/cfg
+  DESTINATION share/${PROJECT_NAME}/cfg
 )
 
-install(TARGETS
-  stag_detect
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
+# Export package
+ament_package()

@@ -58,28 +58,32 @@ struct Common {
     tVec.convertTo(output.col(3), CV_64F);
   }
 
-  static void publishTransform(const tf::Transform &tf,
-                               const ros::Publisher &pub,
-                               const std_msgs::Header &hdr,
-                               const string &tag_tf_prefix,
-                               const string &frame_id, const bool &pub_tf) {
-    if (pub_tf) {
-      static tf::TransformBroadcaster br;
-      br.sendTransform(tf::StampedTransform(tf, hdr.stamp, hdr.frame_id,
-                                            tag_tf_prefix + frame_id));
+  static void publishTransform(
+      const geometry_msgs::msg::Transform &transform,
+      const std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>> &publisher,
+      const std_msgs::msg::Header &header, const std::string &frame_prefix,
+      const std::string &frame_id, bool publish_tf, rclcpp::Node::SharedPtr node) {
+    
+    if (publish_tf) {
+      static std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster =
+        std::make_shared<tf2_ros::TransformBroadcaster>(node);
+
+      geometry_msgs::msg::TransformStamped transform_stamped;
+      transform_stamped.header = header;
+      transform_stamped.child_frame_id = frame_prefix + frame_id;
+      transform_stamped.transform = transform;
+      tf_broadcaster->sendTransform(transform_stamped);
     }
 
-    geometry_msgs::PoseStamped pose_msg;
+    geometry_msgs::msg::PoseStamped pose_msg;
     pose_msg.header.frame_id = frame_id;
-    pose_msg.header.stamp = hdr.stamp;
-    pose_msg.pose.position.x = tf.getOrigin().x();
-    pose_msg.pose.position.y = tf.getOrigin().y();
-    pose_msg.pose.position.z = tf.getOrigin().z();
-    pose_msg.pose.orientation.x = tf.getRotation().x();
-    pose_msg.pose.orientation.y = tf.getRotation().y();
-    pose_msg.pose.orientation.z = tf.getRotation().z();
-    pose_msg.pose.orientation.w = tf.getRotation().w();
-    pub.publish(pose_msg);
+    pose_msg.header.stamp = header.stamp;
+    pose_msg.pose.position.x = transform.translation.x;
+    pose_msg.pose.position.y = transform.translation.y;
+    pose_msg.pose.position.z = transform.translation.z;
+    pose_msg.pose.orientation = transform.rotation;
+
+    publisher->publish(pose_msg);
   }
 
   bool checkCoplanar(std::vector<cv::Point3d> worldP) {

@@ -25,31 +25,33 @@ SOFTWARE.
 #pragma once
 
 // ROS includes
-#include "ros/ros.h"
-#include "cv_bridge/cv_bridge.h"
-#include "image_transport/image_transport.h"
-#include "camera_info_manager/camera_info_manager.h"
+#include "rclcpp/rclcpp.hpp"
+#include "cv_bridge/cv_bridge.hpp"
+#include "image_transport/image_transport.hpp"
+#include "camera_info_manager/camera_info_manager.hpp"
 
 // ROS msgs
-#include "sensor_msgs/image_encodings.h"
-#include "geometry_msgs/PoseStamped.h"
-#include "vision_msgs/Detection2D.h"
+#include "sensor_msgs/image_encodings.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "vision_msgs/msg/detection2_d_array.hpp"
+#include "vision_msgs/msg/detection2_d.hpp"
+
 
 // Stag includes
 #include "stag/Stag.h"
 #include "stag_ros/structures.hpp"
 
 namespace stag_ros {
-class StagNode {
+class StagNode : public rclcpp::Node {
  public:
-  StagNode(ros::NodeHandle &nh, image_transport::ImageTransport &imageT);
+  StagNode();
   ~StagNode();
 
  private:
   // Callbacks
-  void imageCallback(const sensor_msgs::ImageConstPtr &msg);
-  void markersArrayCallback(const geometry_msgs::PoseStampedConstPtr &msg);
-  void cameraInfoCallback(const sensor_msgs::CameraInfoConstPtr &msg);
+  void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
+  // void markersArrayCallback(const geometry_msgs::PoseStampedConstPtr &msg);
+  void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg);
 
   // Functions
   void loadParameters();
@@ -61,15 +63,12 @@ class StagNode {
   int error_correction;
   float marker_size;
 
-  // ROS Subcribers
+  // ROS 2 Interfaces
   image_transport::Subscriber imageSub;
-  ros::Subscriber cameraInfoSub;
-  ros::Subscriber markersSub;
-
-  // ROS Publishers
   image_transport::Publisher imageDebugPub;
-  ros::Publisher markersPub;
-  ros::Publisher markersArrayPub;
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cameraInfoSub;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr markersPub;
+  rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr markersArrayPub;
 
   // Data
   cv::Mat cameraMatrix;
@@ -87,7 +86,7 @@ class StagNode {
   std::string tag_tf_prefix;
 
   // Tag and bundle info
-  std::map<std::string, vision_msgs::Detection2D> markersFrames;
+  std::map<std::string, vision_msgs::msg::Detection2D> markersFrames;
   //std::vector<Bundle> bundles;
   //std::vector<Tag> tags;
   

@@ -1,42 +1,46 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 project(fiducial_msgs)
 
-find_package(catkin REQUIRED COMPONENTS
-  sensor_msgs
-  std_msgs
-  geometry_msgs
-  tf
-  message_generation
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+# Message and service generation
+find_package(rosidl_default_generators REQUIRED)
+
+# Define message files
+set(msg_files
+  "msg/Fiducial.msg"
+  "msg/FiducialArray.msg"
+  "msg/FiducialTransform.msg"
+  "msg/FiducialTransformArray.msg"
+  "msg/FiducialMapEntry.msg"
+  "msg/FiducialMapEntryArray.msg"
 )
 
-add_message_files(
-   FILES
-   Fiducial.msg
-   FiducialArray.msg
-   FiducialTransform.msg
-   FiducialTransformArray.msg
-   FiducialMapEntry.msg
-   FiducialMapEntryArray.msg
+# Define service files
+set(srv_files
+  "srv/InitializeMap.srv"
 )
 
-add_service_files(
-  FILES
-  InitializeMap.srv
+# Generate messages and services
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files}
+  ${srv_files}
+  DEPENDENCIES std_msgs geometry_msgs
 )
 
-generate_messages(
-  DEPENDENCIES 
-  std_msgs 
-  geometry_msgs
+# Package exports
+ament_export_dependencies(rosidl_default_runtime)
+
+# Install
+install(
+  DIRECTORY msg srv
+  DESTINATION share/${PROJECT_NAME}
 )
 
-catkin_package(
-  CATKIN_DEPENDS message_runtime
-)
-
-install(TARGETS
-   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+# Ament package declaration
+ament_package()

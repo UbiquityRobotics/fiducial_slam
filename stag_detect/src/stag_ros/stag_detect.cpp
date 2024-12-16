@@ -34,13 +34,13 @@ SOFTWARE.
 #include "stag/Marker.h"
 
 // ROS includes
-#include "tf/tf.h"
-#include <tf/transform_datatypes.h>
-#include <tf/transform_broadcaster.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <vision_msgs/Detection2D.h>
-#include <vision_msgs/Detection2DArray.h>
-#include <vision_msgs/ObjectHypothesisWithPose.h>
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2/LinearMath/Transform.h"
+#include "tf2_ros/transform_broadcaster.h"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "vision_msgs/msg/detection2_d.hpp"
+#include "vision_msgs/msg/detection2_d_array.hpp"
+#include "vision_msgs/msg/object_hypothesis_with_pose.hpp"
 
 #include <stdexcept>
 #include <iostream>
@@ -48,8 +48,7 @@ SOFTWARE.
 
 namespace stag_ros {
 
-StagNode::StagNode(ros::NodeHandle &nh,
-                   image_transport::ImageTransport &imageT) {
+StagNode::StagNode() : Node("stag_detect") {
   // Load Parameters
   loadParameters();
 
@@ -57,63 +56,71 @@ StagNode::StagNode(ros::NodeHandle &nh,
   try {
     stag = new Stag(stag_library, error_correction, false);
   } catch (const std::invalid_argument &e) {
-    std::cout << e.what() << std::endl;
+    RCLCPP_ERROR(this->get_logger(), "%s", e.what());
     exit(-1);
   }
 
-  // Set Subscribers
-  imageSub = imageT.subscribe(
-      image_topic, 1, &StagNode::imageCallback, this,
-      image_transport::TransportHints(is_compressed ? "compressed" : "raw"));
-  cameraInfoSub =
-      nh.subscribe(camera_info_topic, 1, &StagNode::cameraInfoCallback, this);
+  // Set subscribers
+  imageSub = image_transport::create_subscription(
+      this, image_topic,
+      std::bind(&StagNode::imageCallback, this, std::placeholders::_1),
+      is_compressed ? "compressed" : "raw");
+
+
+  cameraInfoSub = this->create_subscription<sensor_msgs::msg::CameraInfo>(
+      camera_info_topic, 10,
+      std::bind(&StagNode::cameraInfoCallback, this, std::placeholders::_1));
 
   // Set Publishers
   if (debug_images)
-    imageDebugPub = imageT.advertise("stag_ros/image_markers", 1);
-  markersPub = nh.advertise<geometry_msgs::PoseStamped>(markers_topic, 10);
-  markersArrayPub = nh.advertise<vision_msgs::Detection2DArray>(markers_array_topic, 10);
+      imageDebugPub = image_transport::create_publisher(this, "stag_ros/image_markers");
 
+  // imageDebugPub = imageT.advertise("stag_ros/image_markers", 1);
+  markersPub = this->create_publisher<geometry_msgs::msg::PoseStamped>(markers_topic, 10);
+  markersArrayPub = this->create_publisher<vision_msgs::msg::Detection2DArray>(markers_array_topic, 10);
 
   // Initialize camera info
   got_camera_info = false;
+
   cameraMatrix = cv::Mat::zeros(3, 3, CV_64F);
   distortionMat = cv::Mat::zeros(1, 5, CV_64F);
   rectificationMat = cv::Mat::zeros(3, 3, CV_64F);
   projectionMat = cv::Mat::zeros(3, 4, CV_64F);
+  RCLCPP_INFO(this->get_logger(), "initialized");
+
 }
 
 StagNode::~StagNode() { delete stag; }
 
 void StagNode::loadParameters() {
-  // Create private nodeHandle to load parameters
-  ros::NodeHandle nh_lcl("~");
+    // Declare and load parameters
+    stag_library = this->declare_parameter<int>("stag_library", 15);
+    error_correction = this->declare_parameter<int>("error_correction", 7);
+    image_topic = this->declare_parameter<std::string>("image_topic", "image_raw");
+    camera_info_topic = this->declare_parameter<std::string>("camera_info_topic", "camera_info");
+    markers_topic = this->declare_parameter<std::string>("markers_topic", "stag_ros/markers");
+    markers_array_topic = this->declare_parameter<std::string>("markers_array_topic", "stag_ros/markers_array");
+    is_compressed = this->declare_parameter<bool>("is_compressed", false);
+    debug_images = this->declare_parameter<bool>("debug_images", true);
+    publish_tf = this->declare_parameter<bool>("publish_tf", false);
+    tag_tf_prefix = this->declare_parameter<std::string>("tag_tf_prefix", "STag_");
+    marker_size = this->declare_parameter<float>("marker_size", 0.18f);
+  RCLCPP_INFO(this->get_logger(), "loaded params");
 
-  nh_lcl.param("libraryHD", stag_library, 15);
-  nh_lcl.param("errorCorrection", error_correction, 7);
-  nh_lcl.param("raw_image_topic", image_topic, std::string("image_raw"));
-  nh_lcl.param("camera_info_topic", camera_info_topic,
-               std::string("camera_info"));
-  nh_lcl.param("markers_topic", markers_topic,
-               std::string("stag_ros/markers"));
-  nh_lcl.param("markers_array_topic", markers_array_topic,
-               std::string("stag_ros/markers_array"));
-  nh_lcl.param("is_compressed", is_compressed, false);
-  nh_lcl.param("show_markers", debug_images, true);
-  nh_lcl.param("publish_tf", publish_tf, false);
-  nh_lcl.param("tag_tf_prefix", tag_tf_prefix, std::string("STag_"));
-
-  nh_lcl.param("marker_size", marker_size, 0.18f);
 
 }
 
-void StagNode::imageCallback(const sensor_msgs::ImageConstPtr &msg) {
+void StagNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg) {
 #ifndef NDEBUG
   INSTRUMENT;
 #endif
   if (got_camera_info) {
+    // RCLCPP_INFO(this->get_logger(), "got image h:%d, w:%d, enc:%s", msg->height, msg->width, msg->encoding.c_str());
+
     cv::Mat gray;
     msgToGray(msg, gray);
+    // RCLCPP_INFO(this->get_logger(), "gray image h:%d, w:%d", gray.rows, gray.cols);
+
 
     // Process the image to find the markers
     stag->detectMarkers(gray);
@@ -126,7 +133,7 @@ void StagNode::imageCallback(const sensor_msgs::ImageConstPtr &msg) {
       rosMat.encoding = "bgr8";
       rosMat.image = stag->drawMarkers();
 
-      sensor_msgs::Image rosImage;
+      sensor_msgs::msg::Image rosImage;
       rosMat.toImageMsg(rosImage);
 
       imageDebugPub.publish(rosImage);
@@ -136,7 +143,7 @@ void StagNode::imageCallback(const sensor_msgs::ImageConstPtr &msg) {
     // if (markers.size() > 0) {
       // ROS_INFO("STag: Marker detected");
 
-      vision_msgs::Detection2DArray array;
+      vision_msgs::msg::Detection2DArray array;
       array.header = msg->header;
 
       for (int i = 0; i < markers.size(); i++) {
@@ -168,45 +175,56 @@ void StagNode::imageCallback(const sensor_msgs::ImageConstPtr &msg) {
 
       if (marker_pose.empty()) return;
 
-      tf::Matrix3x3 rotMat(
-	  marker_pose.at<double>(0, 0), marker_pose.at<double>(0, 1),
-	  marker_pose.at<double>(0, 2), marker_pose.at<double>(1, 0),
-	  marker_pose.at<double>(1, 1), marker_pose.at<double>(1, 2),
-	  marker_pose.at<double>(2, 0), marker_pose.at<double>(2, 1),
-	  marker_pose.at<double>(2, 2));
-      tf::Quaternion rotQ;
+      tf2::Matrix3x3 rotMat(
+        marker_pose.at<double>(0, 0), marker_pose.at<double>(0, 1),
+        marker_pose.at<double>(0, 2), marker_pose.at<double>(1, 0),
+        marker_pose.at<double>(1, 1), marker_pose.at<double>(1, 2),
+        marker_pose.at<double>(2, 0), marker_pose.at<double>(2, 1),
+        marker_pose.at<double>(2, 2));
+      tf2::Quaternion rotQ;
       rotMat.getRotation(rotQ);
 
-      tf::Vector3 tfVec(marker_pose.at<double>(0, 3),
+      tf2::Vector3 tfVec(marker_pose.at<double>(0, 3),
 			marker_pose.at<double>(1, 3),
 			marker_pose.at<double>(2, 3));
-      auto marker_tf = tf::Transform(rotQ, tfVec);
-      Common::publishTransform(marker_tf, markersPub, msg->header,
-			       tag_tf_prefix, std::to_string(markers[i].id), publish_tf);
+
+      // Create geometry_msgs::msg::Transform
+      geometry_msgs::msg::Transform transform_msg;
+      transform_msg.translation.x = tfVec.x();
+      transform_msg.translation.y = tfVec.y();
+      transform_msg.translation.z = tfVec.z();
+      transform_msg.rotation.x = rotQ.x();
+      transform_msg.rotation.y = rotQ.y();
+      transform_msg.rotation.z = rotQ.z();
+      transform_msg.rotation.w = rotQ.w();
+
+      Common::publishTransform(transform_msg, markersPub, msg->header,
+			       tag_tf_prefix, std::to_string(markers[i].id), publish_tf, shared_from_this());
 
 
-      vision_msgs::Detection2D markerobj;
+      vision_msgs::msg::Detection2D markerobj;
       markerobj.header = msg->header;
-      vision_msgs::ObjectHypothesisWithPose marker;
+      vision_msgs::msg::ObjectHypothesisWithPose marker;
 
       // Convert transform to pose
-      geometry_msgs::Pose pose;
-      pose.position.x = marker_tf.getOrigin().x();
-      pose.position.y = marker_tf.getOrigin().y();
-      pose.position.z = marker_tf.getOrigin().z();
-      pose.orientation.x = marker_tf.getRotation().x();
-      pose.orientation.y = marker_tf.getRotation().y();
-      pose.orientation.z = marker_tf.getRotation().z();
-      pose.orientation.w = marker_tf.getRotation().w();
+      geometry_msgs::msg::Pose pose;
+      pose.position.x = transform_msg.translation.x;
+      pose.position.y = transform_msg.translation.y;
+      pose.position.z = transform_msg.translation.z;
+      pose.orientation.x = transform_msg.rotation.x;
+      pose.orientation.y = transform_msg.rotation.y;
+      pose.orientation.z = transform_msg.rotation.z;
+      pose.orientation.w = transform_msg.rotation.w;
 
       marker.pose.pose = pose;
-      marker.id = markers[i].id;
+      // marker.id = markers[i].id;
+      marker.hypothesis.class_id = std::to_string(markers[i].id);
       markerobj.results.push_back(marker);
 
       array.detections.push_back(markerobj);
     }
 
-    markersArrayPub.publish(array);
+    markersArrayPub->publish(array);
   // }
   /*
     else {
@@ -216,62 +234,67 @@ void StagNode::imageCallback(const sensor_msgs::ImageConstPtr &msg) {
   }
 }
 
-void StagNode::cameraInfoCallback(const sensor_msgs::CameraInfoConstPtr &msg) {
+void StagNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg) {
+  // RCLCPP_INFO(this->get_logger(), "got camera info");
+  // if (msg->k.size() < 9 || msg->d.size() < 5 || msg->r.size() < 9 || msg->p.size() < 12) {
+  //     RCLCPP_INFO(this->get_logger(), "d size: %d, dist model: %s", msg->d.size(), msg->distortion_model.c_str());
+
+  //     throw std::runtime_error("Insufficient data in camera info message");
+  // }
+
   if (!got_camera_info) {
     // Get camera Matrix
-    cameraMatrix.at<double>(0, 0) = msg->K[0];
-    cameraMatrix.at<double>(0, 1) = msg->K[1];
-    cameraMatrix.at<double>(0, 2) = msg->K[2];
-    cameraMatrix.at<double>(1, 0) = msg->K[3];
-    cameraMatrix.at<double>(1, 1) = msg->K[4];
-    cameraMatrix.at<double>(1, 2) = msg->K[5];
-    cameraMatrix.at<double>(2, 0) = msg->K[6];
-    cameraMatrix.at<double>(2, 1) = msg->K[7];
-    cameraMatrix.at<double>(2, 2) = msg->K[8];
+    cameraMatrix.at<double>(0, 0) = msg->k[0];
+    cameraMatrix.at<double>(0, 1) = msg->k[1];
+    cameraMatrix.at<double>(0, 2) = msg->k[2];
+    cameraMatrix.at<double>(1, 0) = msg->k[3];
+    cameraMatrix.at<double>(1, 1) = msg->k[4];
+    cameraMatrix.at<double>(1, 2) = msg->k[5];
+    cameraMatrix.at<double>(2, 0) = msg->k[6];
+    cameraMatrix.at<double>(2, 1) = msg->k[7];
+    cameraMatrix.at<double>(2, 2) = msg->k[8];
 
     // Get distortion Matrix
-    distortionMat.at<double>(0, 0) = msg->D[0];
-    distortionMat.at<double>(0, 1) = msg->D[1];
-    distortionMat.at<double>(0, 2) = msg->D[2];
-    distortionMat.at<double>(0, 3) = msg->D[3];
-    distortionMat.at<double>(0, 4) = msg->D[4];
+    distortionMat.at<double>(0, 0) = msg->d[0];
+    distortionMat.at<double>(0, 1) = msg->d[1];
+    distortionMat.at<double>(0, 2) = msg->d[2];
+    distortionMat.at<double>(0, 3) = msg->d[3];
+    distortionMat.at<double>(0, 4) = msg->d[4];
     // Get rectification Matrix
-    rectificationMat.at<double>(0, 0) = msg->R[0];
-    rectificationMat.at<double>(0, 1) = msg->R[1];
-    rectificationMat.at<double>(0, 2) = msg->R[2];
-    rectificationMat.at<double>(1, 0) = msg->R[3];
-    rectificationMat.at<double>(1, 1) = msg->R[4];
-    rectificationMat.at<double>(1, 2) = msg->R[5];
-    rectificationMat.at<double>(2, 0) = msg->R[6];
-    rectificationMat.at<double>(2, 1) = msg->R[7];
-    rectificationMat.at<double>(2, 2) = msg->R[8];
+    rectificationMat.at<double>(0, 0) = msg->r[0];
+    rectificationMat.at<double>(0, 1) = msg->r[1];
+    rectificationMat.at<double>(0, 2) = msg->r[2];
+    rectificationMat.at<double>(1, 0) = msg->r[3];
+    rectificationMat.at<double>(1, 1) = msg->r[4];
+    rectificationMat.at<double>(1, 2) = msg->r[5];
+    rectificationMat.at<double>(2, 0) = msg->r[6];
+    rectificationMat.at<double>(2, 1) = msg->r[7];
+    rectificationMat.at<double>(2, 2) = msg->r[8];
     // Get projection Matrix
-    projectionMat.at<double>(0, 0) = msg->P[0];
-    projectionMat.at<double>(0, 1) = msg->P[1];
-    projectionMat.at<double>(0, 2) = msg->P[2];
-    projectionMat.at<double>(1, 0) = msg->P[3];
-    projectionMat.at<double>(1, 1) = msg->P[4];
-    projectionMat.at<double>(1, 2) = msg->P[5];
-    projectionMat.at<double>(2, 0) = msg->P[6];
-    projectionMat.at<double>(2, 1) = msg->P[7];
-    projectionMat.at<double>(2, 2) = msg->P[8];
-    projectionMat.at<double>(2, 0) = msg->P[9];
-    projectionMat.at<double>(2, 1) = msg->P[10];
-    projectionMat.at<double>(2, 2) = msg->P[11];
+    projectionMat.at<double>(0, 0) = msg->p[0];
+    projectionMat.at<double>(0, 1) = msg->p[1];
+    projectionMat.at<double>(0, 2) = msg->p[2];
+    projectionMat.at<double>(1, 0) = msg->p[3];
+    projectionMat.at<double>(1, 1) = msg->p[4];
+    projectionMat.at<double>(1, 2) = msg->p[5];
+    projectionMat.at<double>(2, 0) = msg->p[6];
+    projectionMat.at<double>(2, 1) = msg->p[7];
+    projectionMat.at<double>(2, 2) = msg->p[8];
+    projectionMat.at<double>(2, 0) = msg->p[9];
+    projectionMat.at<double>(2, 1) = msg->p[10];
+    projectionMat.at<double>(2, 2) = msg->p[11];
 
     got_camera_info = true;
+  RCLCPP_INFO(this->get_logger(), "got camera info");
   }
+
 }
 }  // namespace stag_ros
 
 int main(int argc, char **argv) {
-  ros::init(argc, argv, "stag_detect");
-  ros::NodeHandle nh;
-  image_transport::ImageTransport imageT(nh);
-
-  stag_ros::StagNode stagN(nh, imageT);
-
-  ros::spin();
-
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<stag_ros::StagNode>();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
