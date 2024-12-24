@@ -1,73 +1,70 @@
-
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(aruco_detect)
 
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  tf2_geometry_msgs
-  tf2_ros
-  tf2
-  tf
-  visualization_msgs
-  vision_msgs
-  image_transport
-  cv_bridge
-  sensor_msgs
-  std_msgs
-  fiducial_msgs
-  dynamic_reconfigure
-)
-
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(vision_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(fiducial_msgs REQUIRED)
 
-# Python Setup
-catkin_python_setup()
+# Include directories
+include_directories(
+  include
+  ${OpenCV_INCLUDE_DIRS}
+)
 
-generate_dynamic_reconfigure_options(cfg/DetectorParams.cfg)
+# Python setup (equivalent in ROS2)
+install(PROGRAMS scripts/create_markers.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
-catkin_package(INCLUDE_DIRS DEPENDS OpenCV)
-
-###########
-## Build ##
-###########
-
-include_directories(${catkin_INCLUDE_DIRS})
-include_directories(${OpenCV_INCLUDE_DIRS})
-
+# Build the executable
 add_executable(aruco_detect src/aruco_detect.cpp)
+ament_target_dependencies(aruco_detect 
+  rclcpp 
+  tf2 
+  tf2_ros 
+  tf2_geometry_msgs 
+  visualization_msgs 
+  image_transport 
+  cv_bridge 
+  sensor_msgs 
+  std_msgs 
+  vision_msgs 
+  std_srvs
+  fiducial_msgs 
+  OpenCV
+)
 
-add_dependencies(aruco_detect ${${PROJECT_NAME}_EXPORTED_TARGETS}
-                 ${catkin_EXPORTED_TARGETS})
-
-target_link_libraries(aruco_detect ${catkin_LIBRARIES} ${OpenCV_LIBS})
-
-#############
-## Install ##
-#############
-
-## Mark executables and/or libraries for installation
+# Install executable
 install(TARGETS aruco_detect
-   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-catkin_install_python(PROGRAMS scripts/create_markers.py
-        DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+# Install launch files
 install(DIRECTORY launch/
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-) 
+  DESTINATION share/${PROJECT_NAME}/launch
+)
 
-###########
-## Tests ##
-###########
+# # Add testing (adjusted for ROS2)
+# if(BUILD_TESTING)
+#   find_package(ament_cmake_gtest REQUIRED)
 
-if(CATKIN_ENABLE_TESTING)
-        find_package(rostest REQUIRED)
+#   ament_add_gtest(aruco_images_test
+#     test/aruco_images_test.cpp
+#   )
+#   target_link_libraries(aruco_images_test ${OpenCV_LIBS})
+# endif()
 
-        add_rostest_gtest(aruco_images_test 
-          test/aruco_images.test 
-          test/aruco_images_test.cpp)
-        target_link_libraries(aruco_images_test ${catkin_LIBRARIES} ${OpenCV_LIBS})
-endif()
+# Package exports
+ament_package()

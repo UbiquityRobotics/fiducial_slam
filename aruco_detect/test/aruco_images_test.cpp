@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
-#include <ros/ros.h>
-#include <image_transport/image_transport.h>
-#include <sensor_msgs/CameraInfo.h>
+#include <rclcpp/rclcpp.hpp>
+#include <image_transport/image_transport.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.hpp>
 
-#include <fiducial_msgs/FiducialArray.h>
-#include <fiducial_msgs/FiducialTransformArray.h>
+#include <fiducial_msgs/msg/fiducial_array.hpp>
+#include <fiducial_msgs/msg/fiducial_transform_array.hpp>
 
 class ArucoImagesTest : public ::testing::Test {
 protected:

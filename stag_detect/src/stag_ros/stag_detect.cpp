@@ -86,8 +86,6 @@ StagNode::StagNode() : Node("stag_detect") {
   distortionMat = cv::Mat::zeros(1, 5, CV_64F);
   rectificationMat = cv::Mat::zeros(3, 3, CV_64F);
   projectionMat = cv::Mat::zeros(3, 4, CV_64F);
-  RCLCPP_INFO(this->get_logger(), "initialized");
-
 }
 
 StagNode::~StagNode() { delete stag; }
@@ -105,8 +103,6 @@ void StagNode::loadParameters() {
     publish_tf = this->declare_parameter<bool>("publish_tf", false);
     tag_tf_prefix = this->declare_parameter<std::string>("tag_tf_prefix", "STag_");
     marker_size = this->declare_parameter<float>("marker_size", 0.18f);
-  RCLCPP_INFO(this->get_logger(), "loaded params");
-
 
 }
 
@@ -285,7 +281,6 @@ void StagNode::cameraInfoCallback(const sensor_msgs::msg::CameraInfo::ConstShare
     projectionMat.at<double>(2, 2) = msg->p[11];
 
     got_camera_info = true;
-  RCLCPP_INFO(this->get_logger(), "got camera info");
   }
 
 }
