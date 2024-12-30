@@ -7,8 +7,8 @@ def generate_launch_description():
     return LaunchDescription([
         # Declare launch arguments
         DeclareLaunchArgument('camera', default_value='/camera', description='Namespace for camera input'),
-        DeclareLaunchArgument('camera_topic', default_value='image_raw', description='Camera topic name'),
-        DeclareLaunchArgument('transport', default_value='raw', description='Image transport method'),
+        DeclareLaunchArgument('image', default_value='image_raw', description='Camera topic name'),
+        DeclareLaunchArgument('transport', default_value='compressed', description='Image transport method'),
         DeclareLaunchArgument('fiducial_len', default_value='0.14', description='Fiducial length in meters'),
         DeclareLaunchArgument('dictionary', default_value='7', description='ArUco dictionary ID'),
         DeclareLaunchArgument('do_pose_estimation', default_value='true', description='Enable pose estimation'),
@@ -35,7 +35,7 @@ def generate_launch_description():
                 {'verbose': LaunchConfiguration('verbose')},
             ],
             remappings=[
-                ('camera', [LaunchConfiguration('camera'), '/', LaunchConfiguration('camera_topic')]),
+                ('camera/compressed', [LaunchConfiguration('camera'), '/', LaunchConfiguration('image'), '/', LaunchConfiguration('transport')]),
                 ('camera_info', [LaunchConfiguration('camera'), '/camera_info']),
             ]
         ),

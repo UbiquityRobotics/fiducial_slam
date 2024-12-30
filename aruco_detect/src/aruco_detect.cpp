@@ -76,7 +76,7 @@ class FiducialsNode : public rclcpp::Node {
 
 
     // Subscribers and publishers
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr img_sub;
+    image_transport::Subscriber img_sub;
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr caminfo_sub;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr ignore_sub;
     rclcpp::Subscription<fiducial_msgs::msg::FiducialArray>::SharedPtr vertices_sub;
@@ -128,7 +128,7 @@ class FiducialsNode : public rclcpp::Node {
 
 
     void ignoreCallback(const std_msgs::msg::String &msg);
-    void imageCallback(const std::shared_ptr<sensor_msgs::msg::Image> msg);
+    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     void poseEstimateCallback(const FiducialArrayConstPtr &msg);
     void camInfoCallback(const std::shared_ptr<const sensor_msgs::msg::CameraInfo> msg);
     // void configCallback(aruco_detect::DetectorParamsConfig &config, uint32_t level);
@@ -141,6 +141,8 @@ class FiducialsNode : public rclcpp::Node {
 
   public:
     FiducialsNode();
+
+    void init();
 };
 
 
@@ -330,7 +332,7 @@ void FiducialsNode::camInfoCallback(const std::shared_ptr<const sensor_msgs::msg
     }
 }
 
-void FiducialsNode::imageCallback(const std::shared_ptr<sensor_msgs::msg::Image> msg)
+void FiducialsNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
 {
     if (enable_detections == false) {
         return; //return without doing anything
@@ -618,6 +620,7 @@ FiducialsNode::FiducialsNode() : Node("aruco_detect"), broadcaster(this)
     this->declare_parameter("verbose", false);
     this->declare_parameter("ignore_fiducials", "");
     this->declare_parameter("fiducial_len_override", "");
+    this->declare_parameter("image_transport", "raw");
 
 
     this->get_parameter("publish_images", publish_images);
@@ -688,9 +691,6 @@ FiducialsNode::FiducialsNode() : Node("aruco_detect"), broadcaster(this)
 
 
     dictionary = aruco::getPredefinedDictionary(dicno);
-
-    img_sub = this->create_subscription<sensor_msgs::msg::Image>(
-        "camera", 10, std::bind(&FiducialsNode::imageCallback, this, std::placeholders::_1));
 
     vertices_sub = this->create_subscription<fiducial_msgs::msg::FiducialArray>(
         "fiducial_vertices", 10, std::bind(&FiducialsNode::poseEstimateCallback, this, std::placeholders::_1));
@@ -768,9 +768,35 @@ FiducialsNode::FiducialsNode() : Node("aruco_detect"), broadcaster(this)
     RCLCPP_INFO(this->get_logger(), "Aruco detection ready");
 }
 
+void FiducialsNode::init(){
+    std::string transport;
+    this->get_parameter("image_transport", transport);
+    auto transport_hints = std::make_shared<image_transport::TransportHints>(this, transport);        // Define subscription options
+    rclcpp::SubscriptionOptions options;
+    rclcpp::QoS qos_profile = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
+    // Use image_transport with the specified transport type
+    image_transport::ImageTransport it(this->shared_from_this());
+    img_sub = it.subscribe(
+        "camera/image_raw",                                    // Base topic
+        qos_profile.get_rmw_qos_profile(),                                                    // Queue size
+        &FiducialsNode::imageCallback,                         // Member function pointer (fp)
+        this,                                                  // Instance pointer (obj)
+        transport_hints.get(),         // Transport hints
+        options                          // Subscription options
+    );
+
+    RCLCPP_INFO(this->get_logger(), "Image transport initialized with '%s' transport", transport.c_str());
+
+}
+
+
 int main(int argc, char ** argv) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<FiducialsNode>());
+
+    auto node = std::make_shared<FiducialsNode>();
+    node->init();
+
+    rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
 }
